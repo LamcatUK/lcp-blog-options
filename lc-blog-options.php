@@ -3,7 +3,7 @@
  * Plugin Name: LC Blog Options
  * Plugin URI: https://github.com/LamcatUK/lcp-blog-options
  * Description: A WordPress plugin to manage blog functionality including disabling blog, comments, and gravatars.
- * Version: 1.1.0
+ * Version: 1.1.2
  * Author: Lamcat - DS
  * License: GPL v2 or later
  *
@@ -12,18 +12,18 @@
 
 // Prevent direct access.
 if ( ! defined( 'ABSPATH' ) ) {
-    exit;
+	exit;
 }
 
 // Define plugin constants.
 if ( ! defined( 'LC_BLOG_OPTIONS_VERSION' ) ) {
-    define( 'LC_BLOG_OPTIONS_VERSION', '1.1.0' );
+	define( 'LC_BLOG_OPTIONS_VERSION', '1.1.2' );
 }
 if ( ! defined( 'LC_BLOG_OPTIONS_PLUGIN_DIR' ) ) {
-    define( 'LC_BLOG_OPTIONS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
+	define( 'LC_BLOG_OPTIONS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 }
 if ( ! defined( 'LC_BLOG_OPTIONS_PLUGIN_URL' ) ) {
-    define( 'LC_BLOG_OPTIONS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
+	define( 'LC_BLOG_OPTIONS_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
 
 if ( ! class_exists( 'LCPBlogOptions' ) ) {
@@ -71,7 +71,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		 */
 		public static function deactivate() {
 			// Optional: Clean up options on deactivation.
-			// delete_option('lc_blog_options');
+			// delete_option('lc_blog_options');.
 		}
 
 		/**
@@ -276,6 +276,9 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		public function apply_blog_restrictions() {
 			$options = get_option( $this->option_name );
 
+			// Add the Lamcat dashboard widget.
+			add_action( 'wp_dashboard_setup', array( $this, 'register_lc_dashboard_widget' ) );
+
 			// Always remove unwanted dashboard widgets.
 			add_action( 'wp_dashboard_setup', array( $this, 'remove_unwanted_dashboard_widgets' ) );
 
@@ -362,6 +365,36 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		}
 
 		/**
+		 * Register the custom Lamcat dashboard widget.
+		 */
+		public function register_lc_dashboard_widget() {
+			wp_add_dashboard_widget(
+				'lc_dashboard_widget',
+				'Lamcat',
+				array( $this, 'lc_dashboard_widget_display' )
+			);
+		}
+
+		/**
+		 * Display the custom Lamcat dashboard widget.
+		 */
+		public function lc_dashboard_widget_display() {
+			$image_url = LC_BLOG_OPTIONS_PLUGIN_URL . 'assets/images/lc-full.jpg';
+			?>
+			<div style="display: flex; align-items: center; justify-content: space-around; gap: 16px;">
+				<img style="width: 50%;" src="<?php echo esc_url( $image_url ); ?>" alt="<?php echo esc_attr__( 'Lamcat', 'lcp-blog-options' ); ?>">
+				<a class="button button-primary" target="_blank" rel="noopener nofollow noreferrer" href="mailto:hello@lamcat.co.uk">Contact</a>
+			</div>
+			<div>
+				<p><strong>Thanks for choosing Lamcat!</strong></p>
+				<hr>
+				<p>Got a problem with your site, or want to make some changes and need us to take a look for you?</p>
+				<p>Use the link above to get in touch and we'll get back to you ASAP.</p>
+			</div>
+			<?php
+		}
+
+		/**
 		 * Disable all blog functionality
 		 */
 		private function disable_blog_functionality() {
@@ -407,6 +440,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		 * Redirect post-related admin pages
 		 */
 		public function redirect_post_pages() {
+			// phpcs:disable WordPress.Security.NonceVerification.Recommended
 			global $pagenow;
 			$post_pages = array( 'edit.php', 'post-new.php', 'post.php' );
 			if ( in_array( $pagenow, $post_pages, true ) ) {
@@ -433,6 +467,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 				wp_safe_redirect( admin_url() );
 				exit;
 			}
+			// phpcs:enable WordPress.Security.NonceVerification.Recommended
 		}
 
 
@@ -582,6 +617,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 
 		/**
 		 * Replace avatar with empty string
+		 * Vars are needed in the declaration to properly hook into the filter, but we can ignore them since we just want to return an empty string.
 		 *
 		 * @param string $avatar      The avatar HTML.
 		 * @param mixed  $id_or_email The user ID or email.
@@ -590,7 +626,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		 * @param string $alt         The alt text.
 		 * @return string Empty string to disable avatars.
 		 */
-		public function disable_gravatar( $avatar, $id_or_email, $size, $default_avatar, $alt ) {
+		public function disable_gravatar( $avatar, $id_or_email, $size, $default_avatar, $alt ) { // phpcs:ignore Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed
 			return '';
 		}
 
@@ -614,7 +650,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		public function unregister_tags() {
 			// Only unregister tags from 'post' type, don't delete the taxonomy entirely.
 			unregister_taxonomy_for_object_type( 'post_tag', 'post' );
-			
+
 			// Hide the taxonomy UI without breaking core functionality.
 			global $wp_taxonomies;
 			if ( isset( $wp_taxonomies['post_tag'] ) ) {
@@ -645,17 +681,17 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 
 // Initialize the plugin only if the class exists and hasn't been initialized yet.
 if ( class_exists( 'LCPBlogOptions' ) && ! isset( $GLOBALS['lc_blog_options_instance'] ) ) {
-    $GLOBALS['lc_blog_options_instance'] = new LCPBlogOptions();
+	$GLOBALS['lc_blog_options_instance'] = new LCPBlogOptions();
 }
 
 // Activation hook.
 if ( ! function_exists( 'lc_blog_options_activation_check' ) ) {
-    register_activation_hook( __FILE__, array( 'LCPBlogOptions', 'activate' ) );
+	register_activation_hook( __FILE__, array( 'LCPBlogOptions', 'activate' ) );
 }
 
 // Deactivation hook.
 if ( ! function_exists( 'lc_blog_options_deactivation_check' ) ) {
-    register_deactivation_hook( __FILE__, array( 'LCPBlogOptions', 'deactivate' ) );
+	register_deactivation_hook( __FILE__, array( 'LCPBlogOptions', 'deactivate' ) );
 }
 
 /**
@@ -693,9 +729,26 @@ add_action(
 add_filter(
 	'plugin_action_links_lcp-blog-options/lcp-blog-options.php',
 	function ( $links ) {
-		$settings_link = '<a href="' . admin_url( 'tools.php?page=lcp-blog-options' ) . '">Blog Options</a>';
+		$settings_link = '<a href="' . admin_url( 'tools.php?page=lc-blog-options' ) . '">Blog Options</a>';
 		array_unshift( $links, $settings_link );
 		return $links;
+	}
+);
+
+
+// Force all ACF blocks to always display in edit mode in the block editor.
+// The 'mode' registration key only sets the default for new blocks; existing blocks
+// have their mode persisted in the serialised HTML comment. This JS subscriber
+// watches the block store and resets any ACF block that drifts to preview/auto.
+// New blocks can finish bootstrapping after insertion, so the mode flip is queued
+// into the next frame and retried until the block actually lands in edit mode.
+add_action(
+	'enqueue_block_editor_assets',
+	function () {
+		wp_add_inline_script(
+			'wp-blocks',
+			"( function () {\n\tvar pending = {};\n\n\tfunction queueEditMode( clientId ) {\n\t\tif ( pending[ clientId ] ) {\n\t\t\treturn;\n\t\t}\n\n\t\tpending[ clientId ] = true;\n\n\t\twindow.requestAnimationFrame( function () {\n\t\t\tvar select = wp.data.select( 'core/block-editor' );\n\t\t\tvar dispatch = wp.data.dispatch( 'core/block-editor' );\n\t\t\tvar block = select && select.getBlock ? select.getBlock( clientId ) : null;\n\n\t\t\tpending[ clientId ] = false;\n\n\t\t\tif (\n\t\t\t\t! block ||\n\t\t\t\t! block.name ||\n\t\t\t\tblock.name.indexOf( 'acf/' ) !== 0 ||\n\t\t\t\t( block.attributes && block.attributes.mode === 'edit' )\n\t\t\t) {\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tif ( dispatch && dispatch.updateBlockAttributes ) {\n\t\t\t\tdispatch.updateBlockAttributes( clientId, { mode: 'edit' } );\n\t\t\t}\n\t\t} );\n\t}\n\n\twp.data.subscribe( function () {\n\t\tvar select = wp.data.select( 'core/block-editor' );\n\t\tif ( ! select || ! select.getBlocks ) {\n\t\t\treturn;\n\t\t}\n\n\t\t( function walk( list ) {\n\t\t\tlist.forEach( function ( block ) {\n\t\t\t\tif ( block.name && block.name.indexOf( 'acf/' ) === 0 ) {\n\t\t\t\t\tqueueEditMode( block.clientId );\n\t\t\t\t}\n\n\t\t\t\tif ( block.innerBlocks && block.innerBlocks.length ) {\n\t\t\t\t\twalk( block.innerBlocks );\n\t\t\t\t}\n\t\t\t} );\n\t\t}( select.getBlocks() ) );\n\t} );\n}() );"
+		);
 	}
 );
 

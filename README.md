@@ -2,6 +2,8 @@
 
 A WordPress plugin that provides granular control over blog functionality, allowing administrators to disable blog features, comments, and gravatars through a simple admin interface.
 
+The plugin also forces Advanced Custom Fields blocks to stay in edit mode in the block editor, including immediately after a new block is inserted, and adds a branded Lamcat dashboard widget.
+
 ## Features
 
 - **Disable Blog**: Completely removes blog functionality including:
@@ -22,6 +24,10 @@ A WordPress plugin that provides granular control over blog functionality, allow
   - Turns off gravatar display
   - Removes avatar options from user profiles
 
+- **Lamcat Dashboard Widget**: Adds a branded admin dashboard widget with quick contact details
+
+- **Force ACF Block Edit Mode**: Keeps all ACF blocks in edit mode in the block editor, including newly inserted blocks
+
 ## Installation
 
 1. Upload the `lcp-blog-options` folder to the `/wp-content/plugins/` directory
@@ -32,16 +38,18 @@ A WordPress plugin that provides granular control over blog functionality, allow
 
 ### Admin Interface
 
-The plugin adds a "LC Blog Options" page under the WordPress admin Tools menu. This page contains three checkboxes:
+The plugin adds a "LC Blog Options" page under the WordPress admin Tools menu. This page contains five checkboxes:
 
-1. **Disable Blog** - When checked, completely disables all blog functionality and automatically enables options 2 and 3
+1. **Disable Blog** - When checked, completely disables all blog functionality and automatically enables options 2, 3, and 4
 2. **Disable Comments** - When checked, disables all comment-related functionality
 3. **Disable Gravatars** - When checked, disables gravatar/avatar display
+4. **Disable Tags** - When checked, removes post tags from the admin UI
+5. **Disable Emojis** - When checked, removes WordPress emoji assets and TinyMCE emoji support
 
 ### Checkbox Behavior
 
-- When "Disable Blog" is checked, "Disable Comments" and "Disable Gravatars" are automatically checked and cannot be unchecked
-- Individual comment and gravatar options can be controlled independently when blog is not disabled
+- When "Disable Blog" is checked, "Disable Comments", "Disable Gravatars", and "Disable Tags" are automatically checked and cannot be unchecked
+- Individual comment, gravatar, tag, and emoji options can be controlled independently when blog is not disabled
 
 ## What Gets Disabled
 
@@ -70,9 +78,21 @@ The plugin adds a "LC Blog Options" page under the WordPress admin Tools menu. T
 - Gravatar images are replaced with empty content
 - Avatar options are removed from user profiles
 
+### When Tags are Disabled:
+
+- Post tags are detached from the default `post` post type
+- The tags admin screen is hidden
+- The tags metabox is removed from the post editor
+
+### When Emojis are Disabled:
+
+- Frontend and admin emoji scripts and styles are removed
+- TinyMCE emoji support is removed
+- The emoji SVG CDN URL is disabled
+
 ## Technical Details
 
-- **Version**: 1.0.0
+- **Version**: 1.1.2
 - **Requires**: WordPress 4.0+
 - **PHP**: 5.6+
 - **License**: GPL v2 or later
@@ -82,7 +102,8 @@ The plugin adds a "LC Blog Options" page under the WordPress admin Tools menu. T
 ```
 lcp-blog-options/
 ├── lc-blog-options.php    # Main plugin file
-└── README.md             # This documentation
+├── assets/images/lc-full.jpg # Dashboard widget image
+└── README.md                # This documentation
 ```
 
 ## Hooks and Filters Used
@@ -110,3 +131,13 @@ This plugin is provided as-is. For customizations or support, please contact the
 - Added comments disable functionality
 - Added gravatars disable functionality
 - Added admin interface under Tools menu
+
+### 1.1.1
+
+- Forced ACF blocks into edit mode immediately when inserted in the block editor
+- Fixed the edit-mode enforcement so it also works for newly added blocks in WordPress 7.0
+
+### 1.1.2
+
+- Added the Lamcat dashboard widget to the WordPress admin dashboard
+- Moved the dashboard widget image into the plugin at `assets/images/lc-full.jpg`
