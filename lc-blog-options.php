@@ -819,7 +819,7 @@ add_action(
 
 // Add a 'Blog Options' link to the plugin's action links on the Installed Plugins page.
 add_filter(
-	'plugin_action_links_lcp-blog-options/lcp-blog-options.php',
+	'plugin_action_links_lcp-blog-options/lc-blog-options.php',
 	function ( $links ) {
 		$settings_link = '<a href="' . admin_url( 'tools.php?page=lc-blog-options' ) . '">Blog Options</a>';
 		array_unshift( $links, $settings_link );
@@ -831,7 +831,7 @@ add_filter(
 add_filter(
 	'plugin_row_meta',
 	function ( $plugin_meta, $plugin_file ) {
-		if ( 'lcp-blog-options/lcp-blog-options.php' !== $plugin_file ) {
+		if ( 'lcp-blog-options/lc-blog-options.php' !== $plugin_file ) {
 			return $plugin_meta;
 		}
 
