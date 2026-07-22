@@ -827,6 +827,22 @@ add_filter(
 	}
 );
 
+// Add a direct settings link to the plugin meta row on the Installed Plugins page.
+add_filter(
+	'plugin_row_meta',
+	function ( $plugin_meta, $plugin_file ) {
+		if ( 'lcp-blog-options/lcp-blog-options.php' !== $plugin_file ) {
+			return $plugin_meta;
+		}
+
+		$plugin_meta[] = '<a href="' . admin_url( 'tools.php?page=lc-blog-options' ) . '">Open Blog Options</a>';
+
+		return $plugin_meta;
+	},
+	10,
+	2
+);
+
 
 // Force all ACF blocks to always display in edit mode in the block editor.
 // The 'mode' registration key only sets the default for new blocks; existing blocks
