@@ -3,7 +3,7 @@
  * Plugin Name: LC Blog Options
  * Plugin URI: https://github.com/LamcatUK/lcp-blog-options
  * Description: A WordPress plugin to manage blog functionality including disabling blog, comments, and gravatars.
- * Version: 1.1.2
+ * Version: 1.1.4
  * Author: Lamcat - DS
  * License: GPL v2 or later
  *
