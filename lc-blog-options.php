@@ -3,7 +3,7 @@
  * Plugin Name: LC Blog Options
  * Plugin URI: https://github.com/LamcatUK/lcp-blog-options
  * Description: A WordPress plugin to manage blog functionality including disabling blog, comments, and gravatars.
- * Version: 1.1.4
+ * Version: 1.2.0
  * Author: Lamcat - DS
  * License: GPL v2 or later
  *
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 if ( ! defined( 'LC_BLOG_OPTIONS_VERSION' ) ) {
-	define( 'LC_BLOG_OPTIONS_VERSION', '1.1.2' );
+	define( 'LC_BLOG_OPTIONS_VERSION', '1.2.0' );
 }
 if ( ! defined( 'LC_BLOG_OPTIONS_PLUGIN_DIR' ) ) {
 	define( 'LC_BLOG_OPTIONS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -61,6 +61,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 				'disable_tags'                  => 0,
 				'disable_emojis'                => 0,
 				'suppress_object_cache_warning' => 0,
+				'suppress_core_update_nag'      => 0,
 			);
 			add_option( 'lc_blog_options', $default_options );
 		}
@@ -95,7 +96,10 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 			add_action( 'admin_init', array( $this, 'settings_init' ) );
 
 			// Keep ACF blocks in edit mode so their fields render in-canvas, not in the sidebar.
-			add_action( 'enqueue_block_editor_assets', array( $this, 'force_acf_blocks_edit_mode' ) );
+			// No-op entirely on sites without ACF active.
+			if ( lcp_is_acf_active() ) {
+				add_action( 'enqueue_block_editor_assets', array( $this, 'force_acf_blocks_edit_mode' ) );
+			}
 
 			// Apply functionality based on settings.
 			$this->apply_blog_restrictions();
@@ -112,6 +116,10 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 		 * @return void
 		 */
 		public function force_acf_blocks_edit_mode() {
+			if ( ! lcp_acf_blocks_force_edit_mode() ) {
+				return;
+			}
+
 			$script = <<<'JS'
 wp.domReady(function () {
 	if (!window.wp || !wp.data || !wp.data.select || !wp.data.dispatch) return;
@@ -237,6 +245,14 @@ JS;
 				'lc_blog_options',
 				'lc_blog_options_section'
 			);
+
+			add_settings_field(
+				'suppress_core_update_nag',
+				'Suppress Core Update Nag',
+				array( $this, 'suppress_core_update_nag_render' ),
+				'lc_blog_options',
+				'lc_blog_options_section'
+			);
 		}
 
 		/**
@@ -319,6 +335,18 @@ JS;
 		}
 
 		/**
+		 * Render suppress core update nag checkbox
+		 */
+		public function suppress_core_update_nag_render() {
+			$options = get_option( $this->option_name );
+			$checked = isset( $options['suppress_core_update_nag'] ) ? $options['suppress_core_update_nag'] : 0;
+			?>
+			<input type="checkbox" id="suppress_core_update_nag" name="<?php echo esc_attr( $this->option_name ); ?>[suppress_core_update_nag]" value="1" <?php checked( 1, $checked ); ?>>
+			<label for="suppress_core_update_nag">Hide the "WordPress x.x is available" banner and block WordPress from auto-updating to a new major version on its own (for sites deliberately pinned to an older release). Dashboard &rarr; Updates still works, and minor/security updates are unaffected.</label>
+			<?php
+		}
+
+		/**
 		 * Options page HTML
 		 */
 		public function options_page() {
@@ -372,6 +400,30 @@ JS;
 			// Suppress persistent object cache warning in Site Health if enabled.
 			if ( isset( $options['suppress_object_cache_warning'] ) && $options['suppress_object_cache_warning'] ) {
 				add_filter( 'site_status_should_suggest_persistent_object_cache', '__return_false' );
+			}
+
+			// A site that suppresses the core update nag is declaring it's deliberately
+			// pinned to its current release, so also stop WordPress auto-updating to a
+			// new major version on its own — that matters most on WP 7.1, which broke
+			// ACF's TinyMCE fields by moving the block editor canvas into an iframe.
+			// Update checks, Dashboard > Updates and minor/security auto-updates all
+			// carry on regardless; only the nag and the major auto-update are affected.
+			if ( isset( $options['suppress_core_update_nag'] ) && $options['suppress_core_update_nag'] ) {
+				add_action(
+					'admin_init',
+					function () {
+						remove_action( 'admin_notices', 'update_nag', 3 );
+						remove_action( 'network_admin_notices', 'update_nag', 3 );
+					}
+				);
+
+				add_filter(
+					'allow_major_auto_core_updates',
+					function ( $allow ) {
+						return apply_filters( 'lcp_block_major_core_auto_updates', true ) ? false : $allow;
+					},
+					99
+				);
 			}
 
 			// Check if blog is disabled.
@@ -844,21 +896,199 @@ add_filter(
 );
 
 
-// Force all ACF blocks to always display in edit mode in the block editor.
-// The 'mode' registration key only sets the default for new blocks; existing blocks
-// have their mode persisted in the serialised HTML comment. This JS subscriber
-// watches the block store and resets any ACF block that drifts to preview/auto.
-// In newer WordPress builds the editor can finish hydrating after this script loads,
-// so boot the watcher lazily and re-queue mode flips until the block lands in edit.
-add_action(
-	'enqueue_block_editor_assets',
-	function () {
-		wp_add_inline_script(
-			'wp-block-editor',
-			"( function () {\n\tvar pending = {};\n\tvar watcherStarted = false;\n\n\tfunction getEditorSelect() {\n\t\treturn window.wp && wp.data && wp.data.select ? wp.data.select( 'core/block-editor' ) : null;\n\t}\n\n\tfunction getEditorDispatch() {\n\t\treturn window.wp && wp.data && wp.data.dispatch ? wp.data.dispatch( 'core/block-editor' ) : null;\n\t}\n\n\tfunction queueEditMode( clientId ) {\n\t\tif ( pending[ clientId ] ) {\n\t\t\treturn;\n\t\t}\n\n\t\tpending[ clientId ] = true;\n\n\t\twindow.requestAnimationFrame( function () {\n\t\t\tvar select = getEditorSelect();\n\t\t\tvar dispatch = getEditorDispatch();\n\t\t\tvar block = select && select.getBlock ? select.getBlock( clientId ) : null;\n\n\t\t\tpending[ clientId ] = false;\n\n\t\t\tif ( ! block || ! block.name || block.name.indexOf( 'acf/' ) !== 0 ) {\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tif ( block.attributes && block.attributes.mode === 'edit' ) {\n\t\t\t\treturn;\n\t\t\t}\n\n\t\t\tif ( dispatch && dispatch.updateBlockAttributes ) {\n\t\t\t\tdispatch.updateBlockAttributes( clientId, { mode: 'edit' } );\n\t\t\t\twindow.setTimeout( function () {\n\t\t\t\t\tvar refreshedSelect = getEditorSelect();\n\t\t\t\t\tvar refreshedBlock = refreshedSelect && refreshedSelect.getBlock ? refreshedSelect.getBlock( clientId ) : null;\n\n\t\t\t\t\tif ( refreshedBlock && refreshedBlock.attributes && refreshedBlock.attributes.mode !== 'edit' ) {\n\t\t\t\t\t\tqueueEditMode( clientId );\n\t\t\t\t\t}\n\t\t\t\t}, 50 );\n\t\t\t}\n\t\t} );\n\t}\n\n\tfunction forceAllAcfBlocksToEdit() {\n\t\tvar select = getEditorSelect();\n\t\tvar clientIds = select && select.getClientIdsWithDescendants ? select.getClientIdsWithDescendants() : [];\n\n\t\tclientIds.forEach( function ( clientId ) {\n\t\t\tvar blockName = select.getBlockName ? select.getBlockName( clientId ) : '';\n\n\t\t\tif ( blockName && blockName.indexOf( 'acf/' ) === 0 ) {\n\t\t\t\tqueueEditMode( clientId );\n\t\t\t}\n\t\t} );\n\t}\n\n\tfunction startWatcher() {\n\t\tif ( watcherStarted ) {\n\t\t\treturn;\n\t\t}\n\n\t\tvar select = getEditorSelect();\n\t\tif ( ! select || ! select.getClientIdsWithDescendants ) {\n\t\t\twindow.setTimeout( startWatcher, 100 );\n\t\t\treturn;\n\t\t}\n\n\t\twatcherStarted = true;\n\t\tforceAllAcfBlocksToEdit();\n\t\twp.data.subscribe( forceAllAcfBlocksToEdit );\n\t}\n\n\tif ( window.wp && wp.domReady ) {\n\t\twp.domReady( startWatcher );\n\t} else {\n\t\tstartWatcher();\n\t}\n}() );",
-			'after'
-		);
-	}
-);
+/**
+ * Whether ACF (or ACF PRO) is active on this site.
+ *
+ * Every ACF-specific block-editor workaround below is gated on this, so the
+ * plugin is a complete no-op for that feature set on sites that don't run
+ * ACF — nothing to disable, nothing left registered to reason about.
+ *
+ * @return bool
+ */
+function lcp_is_acf_active() {
+	return function_exists( 'acf_register_block_type' );
+}
 
+/**
+ * Whether ACF blocks should be pinned to edit mode, rendering their fields in
+ * the canvas rather than the inspector sidebar.
+ *
+ * Everything that depends on in-canvas fields — the mode watcher above, the
+ * iframe stylesheets, and hiding ACF's duplicate inspector copy — is gated on
+ * this, so a site can opt out of the whole arrangement in one place.
+ *
+ * @return bool
+ */
+function lcp_acf_blocks_force_edit_mode() {
+	return (bool) apply_filters( 'lcp_acf_blocks_force_edit_mode', true );
+}
+
+/**
+ * Whether the block editor canvas is rendered inside an iframe.
+ *
+ * WP 7.1 hardcodes `shouldIframe: true` on the block canvas; before that, a
+ * screen with meta boxes rendered the canvas inline, where ACF's fields
+ * inherit the admin document's styles and scripts and need no help from us.
+ *
+ * Everything that only exists to prop up ACF inside that iframe is gated on
+ * this, so sites pinned to 7.0.x don't carry the workarounds.
+ *
+ * @return bool
+ */
+function lcp_editor_canvas_is_iframed() {
+	$iframed = version_compare( get_bloginfo( 'version' ), '7.1', '>=' );
+
+	return (bool) apply_filters( 'lcp_editor_canvas_is_iframed', $iframed );
+}
+
+// Everything below is an ACF-specific block-editor workaround — no-op on
+// sites that don't have ACF active, rather than registering hooks that would
+// just sit there checking wp_style_is( 'acf-input', ... ) forever and never
+// firing.
+if ( lcp_is_acf_active() ) {
+
+	// Prevent TinyMCE focus-steal / scroll-jump in ACF Gutenberg repeaters.
+	// When ACF adds a repeater row (or flexible content layout) containing a
+	// WYSIWYG field, TinyMCE initialises the editor and may steal focus from
+	// the editor the user was typing in, causing the page to scroll to it.
+	// This JS subscriber:
+	//   1. Forces `delay: true` on all WYSIWYG fields via the ACF filter API
+	//      so editors only initialise when clicked rather than on row add.
+	//   2. Captures scroll position before ACF DOM mutations and restores it
+	//      if the page jumps after the new editor is mounted.
+	add_action(
+		'enqueue_block_editor_assets',
+		function () {
+			wp_add_inline_script(
+				'wp-block-editor',
+				"( function () {\n\tvar savedScrollY = 0;\n\tvar guardActive = false;\n\n\tif ( typeof acf !== 'undefined' && acf.add_filter ) {\n\t\tacf.add_filter( 'wysiwyg_field_args', function ( args ) {\n\t\t\tif ( args.delay === 0 || args.delay === false || args.delay === undefined ) {\n\t\t\t\targs.delay = true;\n\t\t\t}\n\t\t\treturn args;\n\t\t} );\n\t}\n\n\tif ( typeof acf !== 'undefined' && acf.addAction ) {\n\t\tacf.addAction( 'append', function () {\n\t\t\tsavedScrollY = window.scrollY;\n\t\t\tguardActive = true;\n\t\t}, 1 );\n\n\t\tacf.addAction( 'append', function () {\n\t\t\twindow.setTimeout( function () {\n\t\t\t\tif ( guardActive && savedScrollY > 0 && Math.abs( window.scrollY - savedScrollY ) > 10 ) {\n\t\t\t\t\twindow.scrollTo( window.scrollX, savedScrollY );\n\t\t\t\t}\n\t\t\t\tguardActive = false;\n\t\t\t}, 100 );\n\t\t}, 999 );\n\t}\n} )();",
+				'after'
+			);
+		}
+	);
+
+	// WP 7.0 moved meta boxes to their own panel, so they no longer force the block
+	// editor canvas out of an iframe. ACF only injects its small inline-editing
+	// stylesheet into that iframe, so ACF blocks rendered in edit mode — which is
+	// all of them, per the block above — get no field styling at all. Styles
+	// enqueued on 'enqueue_block_assets' in admin do reach the iframe.
+	add_action(
+		'enqueue_block_assets',
+		function () {
+			if ( ! is_admin() || ! wp_style_is( 'acf-input', 'registered' ) || ! lcp_acf_blocks_force_edit_mode() ) {
+				return;
+			}
+
+			// Only needed when the canvas is an iframe; inline, it already has these.
+			if ( ! lcp_editor_canvas_is_iframed() ) {
+				return;
+			}
+
+			wp_enqueue_style( 'acf-input' );
+
+			if ( wp_style_is( 'acf-pro-input', 'registered' ) ) {
+				wp_enqueue_style( 'acf-pro-input' );
+			}
+
+			// Classic-editor chrome: without this the Visual/Text switcher on
+			// wysiwyg fields renders as unstyled browser buttons. The block
+			// editor's own editor.min.css is a different file and doesn't cover it.
+			wp_enqueue_style( 'editor-buttons' );
+
+			// ACF's repeater "Add row", gallery "Add to gallery" etc. are core admin
+			// buttons (.button / .button-primary). Those styles live in wp-includes,
+			// with the per-user colour scheme supplying the fills. Both are scoped
+			// under .wp-core-ui, which the iframe body gets from the script below.
+			wp_enqueue_style( 'buttons' );
+			wp_enqueue_style( 'colors' );
+		}
+	);
+
+	// Core admin button styles are all scoped under `.wp-core-ui`, a class the admin
+	// <body> carries but the block editor's canvas iframe body does not — so without
+	// this every ACF button in a block renders as a bare browser button. Gutenberg
+	// rewrites that className on re-render, so re-assert the class rather than
+	// setting it once, and watch for the iframe being remounted.
+	add_action(
+		'enqueue_block_editor_assets',
+		function () {
+			if ( ! lcp_acf_blocks_force_edit_mode() || ! lcp_editor_canvas_is_iframed() ) {
+				return;
+			}
+
+			$script = <<<'JS'
+( function () {
+	function tag( body ) {
+		if ( body && ! body.classList.contains( 'wp-core-ui' ) ) {
+			body.classList.add( 'wp-core-ui' );
+		}
+	}
+
+	function attach( iframe ) {
+		var doc = iframe.contentDocument;
+
+		if ( ! doc || ! doc.body ) {
+			return false;
+		}
+
+		if ( iframe.dataset.lcpWpCoreUi ) {
+			return true;
+		}
+
+		iframe.dataset.lcpWpCoreUi = '1';
+		tag( doc.body );
+
+		new window.MutationObserver( function () {
+			tag( doc.body );
+		} ).observe( doc.body, { attributes: true, attributeFilter: [ 'class' ] } );
+
+		return true;
+	}
+
+	window.setInterval( function () {
+		var iframe = document.querySelector( 'iframe[name="editor-canvas"]' );
+
+		if ( iframe ) {
+			attach( iframe );
+		}
+	}, 500 );
+}() );
+JS;
+
+			wp_add_inline_script( 'wp-block-editor', $script, 'after' );
+		}
+	);
+
+	// ACF renders the selected block's fields into the inspector sidebar as well as
+	// the canvas, so forcing edit mode above leaves the same form mounted twice.
+	// The canvas copy is the one we want, so hide the inspector duplicate — but only
+	// while the mode watcher is guaranteeing a canvas copy exists to hide it in
+	// favour of, otherwise the fields would be unreachable.
+	add_action(
+		'admin_head',
+		function () {
+			if ( ! wp_style_is( 'acf-input', 'registered' ) || ! lcp_acf_blocks_force_edit_mode() ) {
+				return;
+			}
+
+			echo '<style>.block-editor-block-inspector .acf-block-component.acf-block-panel{display:none;}</style>';
+		}
+	);
+
+	// WP 7.1's QTags constructor returns early — without setting `settings` — when
+	// it can't find the editor textarea by id. `new QTags()` still hands back a
+	// truthy object, so ACF's own `if ( ! instance ) return` guard misses it and
+	// buildQuicktags() throws reading `settings.buttons`. That single throw aborts
+	// ACF's whole field-init pass, leaving every block in the editor unstyled or
+	// showing "This block has encountered an error and cannot be previewed."
+	add_action(
+		'acf/input/admin_enqueue_scripts',
+		function () {
+			wp_add_inline_script(
+				'acf-input',
+				"( function () {\n\tif ( typeof acf === 'undefined' || ! acf.tinymce || typeof acf.tinymce.buildQuicktags !== 'function' ) {\n\t\treturn;\n\t}\n\n\tvar buildQuicktags = acf.tinymce.buildQuicktags;\n\n\tacf.tinymce.buildQuicktags = function ( instance ) {\n\t\tif ( ! instance || ! instance.settings ) {\n\t\t\treturn false;\n\t\t}\n\n\t\treturn buildQuicktags.apply( this, arguments );\n\t};\n}() );"
+			);
+		}
+	);
+} // End if ( lcp_is_acf_active() ).
 ?>
