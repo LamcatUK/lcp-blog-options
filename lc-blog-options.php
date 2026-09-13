@@ -303,6 +303,13 @@ JS;
 		}
 
 		/**
+		 * Settings section callback
+		 */
+		public function settings_section_callback() {
+			echo '<p>Configure blog functionality options below:</p>';
+		}
+
+		/**
 		 * Security Headers section callback
 		 */
 		public function security_section_callback() {
