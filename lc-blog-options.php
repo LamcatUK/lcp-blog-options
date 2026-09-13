@@ -3,7 +3,7 @@
  * Plugin Name: LC Blog Options
  * Plugin URI: https://github.com/LamcatUK/lcp-blog-options
  * Description: A WordPress plugin to manage blog functionality including disabling blog, comments, and gravatars.
- * Version: 1.3.0
+ * Version: 1.4.0
  * Author: Lamcat - DS
  * License: GPL v2 or later
  *
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 if ( ! defined( 'LC_BLOG_OPTIONS_VERSION' ) ) {
-	define( 'LC_BLOG_OPTIONS_VERSION', '1.3.0' );
+	define( 'LC_BLOG_OPTIONS_VERSION', '1.4.0' );
 }
 if ( ! defined( 'LC_BLOG_OPTIONS_PLUGIN_DIR' ) ) {
 	define( 'LC_BLOG_OPTIONS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -70,6 +70,9 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 				'enable_coop'                   => 0,
 				'enable_xfo'                    => 0,
 				'enable_trusted_types'          => 0,
+				'enable_xcto'                   => 0,
+				'enable_referrer_policy'        => 0,
+				'enable_permissions_policy'     => 0,
 			);
 			add_option( 'lc_blog_options', $default_options );
 		}
@@ -262,18 +265,23 @@ JS;
 				'lc_blog_options_section'
 			);
 
+			// Registered under their own page slug ('lc_blog_options_headers') rather
+			// than 'lc_blog_options' so options_page() can render this section into
+			// its own tab via a separate do_settings_sections() call. The option
+			// group passed to settings_fields()/register_setting() is unaffected —
+			// both tabs still save to the same 'lc_blog_options' option.
 			add_settings_section(
 				'lc_blog_options_security_section',
 				'Security Headers',
 				array( $this, 'security_section_callback' ),
-				'lc_blog_options'
+				'lc_blog_options_headers'
 			);
 
 			add_settings_field(
 				'enable_hsts',
 				'HSTS',
 				array( $this, 'enable_hsts_render' ),
-				'lc_blog_options',
+				'lc_blog_options_headers',
 				'lc_blog_options_security_section'
 			);
 
@@ -281,7 +289,7 @@ JS;
 				'enable_coop',
 				'Cross-Origin-Opener-Policy',
 				array( $this, 'enable_coop_render' ),
-				'lc_blog_options',
+				'lc_blog_options_headers',
 				'lc_blog_options_security_section'
 			);
 
@@ -289,7 +297,31 @@ JS;
 				'enable_xfo',
 				'X-Frame-Options',
 				array( $this, 'enable_xfo_render' ),
-				'lc_blog_options',
+				'lc_blog_options_headers',
+				'lc_blog_options_security_section'
+			);
+
+			add_settings_field(
+				'enable_xcto',
+				'X-Content-Type-Options',
+				array( $this, 'enable_xcto_render' ),
+				'lc_blog_options_headers',
+				'lc_blog_options_security_section'
+			);
+
+			add_settings_field(
+				'enable_referrer_policy',
+				'Referrer-Policy',
+				array( $this, 'enable_referrer_policy_render' ),
+				'lc_blog_options_headers',
+				'lc_blog_options_security_section'
+			);
+
+			add_settings_field(
+				'enable_permissions_policy',
+				'Permissions-Policy',
+				array( $this, 'enable_permissions_policy_render' ),
+				'lc_blog_options_headers',
 				'lc_blog_options_security_section'
 			);
 
@@ -297,7 +329,7 @@ JS;
 				'enable_trusted_types',
 				'Trusted Types',
 				array( $this, 'enable_trusted_types_render' ),
-				'lc_blog_options',
+				'lc_blog_options_headers',
 				'lc_blog_options_security_section'
 			);
 		}
@@ -357,6 +389,45 @@ JS;
 			<input type="checkbox" id="enable_xfo" name="<?php echo esc_attr( $this->option_name ); ?>[enable_xfo]" value="1" <?php checked( 1, $checked ); ?>>
 			<label for="enable_xfo">Send <code>X-Frame-Options: SAMEORIGIN</code></label>
 			<p class="description">Blocks this site from being framed by any other origin (the standard clickjacking mitigation), while still allowing the site to frame itself. Skip this if a legitimate third party deliberately embeds the site in an iframe.</p>
+			<?php
+		}
+
+		/**
+		 * Render enable X-Content-Type-Options checkbox
+		 */
+		public function enable_xcto_render() {
+			$options = get_option( $this->option_name );
+			$checked = isset( $options['enable_xcto'] ) ? $options['enable_xcto'] : 0;
+			?>
+			<input type="checkbox" id="enable_xcto" name="<?php echo esc_attr( $this->option_name ); ?>[enable_xcto]" value="1" <?php checked( 1, $checked ); ?>>
+			<label for="enable_xcto">Send <code>X-Content-Type-Options: nosniff</code></label>
+			<p class="description">Stops the browser from MIME-sniffing a response away from the Content-Type the server declared — closes off a class of attack where a file uploaded as, say, an image gets sniffed and executed as HTML/JS instead. Safe to enable on virtually any site.</p>
+			<?php
+		}
+
+		/**
+		 * Render enable Referrer-Policy checkbox
+		 */
+		public function enable_referrer_policy_render() {
+			$options = get_option( $this->option_name );
+			$checked = isset( $options['enable_referrer_policy'] ) ? $options['enable_referrer_policy'] : 0;
+			?>
+			<input type="checkbox" id="enable_referrer_policy" name="<?php echo esc_attr( $this->option_name ); ?>[enable_referrer_policy]" value="1" <?php checked( 1, $checked ); ?>>
+			<label for="enable_referrer_policy">Send <code>Referrer-Policy: strict-origin-when-cross-origin</code></label>
+			<p class="description">WordPress core already prints this same policy as a <code>&lt;meta&gt;</code> tag on the front end, but header-only scanners (including securityheaders.com) don't read that tag — this sends the identical policy as an HTTP header too. Full referrer on same-origin and HTTPS→HTTPS navigation, origin only cross-origin, nothing at all on a downgrade to HTTP.</p>
+			<?php
+		}
+
+		/**
+		 * Render enable Permissions-Policy checkbox
+		 */
+		public function enable_permissions_policy_render() {
+			$options = get_option( $this->option_name );
+			$checked = isset( $options['enable_permissions_policy'] ) ? $options['enable_permissions_policy'] : 0;
+			?>
+			<input type="checkbox" id="enable_permissions_policy" name="<?php echo esc_attr( $this->option_name ); ?>[enable_permissions_policy]" value="1" <?php checked( 1, $checked ); ?>>
+			<label for="enable_permissions_policy">Send <code>Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()</code></label>
+			<p class="description">Disables browser APIs this site's own pages have no legitimate use for — camera, microphone, geolocation, and FLoC's <code>interest-cohort</code> — for this origin and anything embedded in it. Skip this if the site (or something it embeds, e.g. a video-call widget, store locator, or ad/analytics script) genuinely needs one of these; enabling it blocks that feature outright rather than just warning about it.</p>
 			<?php
 		}
 
@@ -466,17 +537,37 @@ JS;
 			?>
 			<div class="wrap">
 				<h1>LC Blog Options</h1>
+				<h2 class="nav-tab-wrapper">
+					<a href="#lc-tab-blog" class="nav-tab nav-tab-active" data-tab="blog">Blog Options</a>
+					<a href="#lc-tab-headers" class="nav-tab" data-tab="headers">Security Headers</a>
+				</h2>
 				<form action="options.php" method="post">
-					<?php
-					settings_fields( 'lc_blog_options' );
-					do_settings_sections( 'lc_blog_options' );
-					submit_button();
-					?>
+					<?php settings_fields( 'lc_blog_options' ); ?>
+					<div id="lc-tab-blog" class="lc-tab-panel">
+						<?php do_settings_sections( 'lc_blog_options' ); ?>
+					</div>
+					<div id="lc-tab-headers" class="lc-tab-panel" style="display: none;">
+						<?php do_settings_sections( 'lc_blog_options_headers' ); ?>
+					</div>
+					<?php submit_button(); ?>
 				</form>
 			</div>
-			
+
 			<script>
 			jQuery(document).ready(function($) {
+				// Tab switching — both panels stay in the DOM (and get submitted)
+				// regardless of which one is visible, so switching tabs never loses
+				// the other tab's field values.
+				$('.nav-tab-wrapper .nav-tab').on('click', function(e) {
+					e.preventDefault();
+
+					$('.nav-tab-wrapper .nav-tab').removeClass('nav-tab-active');
+					$(this).addClass('nav-tab-active');
+
+					$('.lc-tab-panel').hide();
+					$('#lc-tab-' + $(this).data('tab')).show();
+				});
+
 				// Handle disable blog checkbox logic
 				$('#disable_blog').change(function() {
 					if ($(this).is(':checked')) {
@@ -485,7 +576,7 @@ JS;
 						$('#disable_tags').prop('checked', true);
 					}
 				});
-				
+
 				// Prevent unchecking comments/gravatars/tags if blog is disabled
 				$('#disable_comments, #disable_gravatars, #disable_tags').change(function() {
 					if (!$(this).is(':checked') && $('#disable_blog').is(':checked')) {
@@ -555,7 +646,10 @@ JS;
 				! empty( $options['enable_hsts'] ) ||
 				! empty( $options['enable_coop'] ) ||
 				! empty( $options['enable_xfo'] ) ||
-				! empty( $options['enable_trusted_types'] )
+				! empty( $options['enable_trusted_types'] ) ||
+				! empty( $options['enable_xcto'] ) ||
+				! empty( $options['enable_referrer_policy'] ) ||
+				! empty( $options['enable_permissions_policy'] )
 			) {
 				add_action( 'send_headers', array( $this, 'send_security_headers' ) );
 			}
@@ -602,6 +696,26 @@ JS;
 			// Classic clickjacking mitigation — still allows the site to frame itself.
 			if ( ! empty( $options['enable_xfo'] ) ) {
 				header( 'X-Frame-Options: SAMEORIGIN' );
+			}
+
+			// Stops MIME-sniffing away from the declared Content-Type; safe on
+			// virtually any site, no compatibility concerns.
+			if ( ! empty( $options['enable_xcto'] ) ) {
+				header( 'X-Content-Type-Options: nosniff' );
+			}
+
+			// Same policy WordPress core already prints as a <meta> tag — sent as a
+			// header too because header-only scanners (securityheaders.com included)
+			// don't read the meta tag.
+			if ( ! empty( $options['enable_referrer_policy'] ) ) {
+				header( 'Referrer-Policy: strict-origin-when-cross-origin' );
+			}
+
+			// Blocks camera/microphone/geolocation/FLoC for this origin and anything
+			// it embeds — see the settings field description for what legitimately
+			// needs opting back out of this.
+			if ( ! empty( $options['enable_permissions_policy'] ) ) {
+				header( 'Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()' );
 			}
 
 			// Front-end only — see print_trusted_types_default_policy() for why
