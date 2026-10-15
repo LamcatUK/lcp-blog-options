@@ -3,7 +3,7 @@
  * Plugin Name: LC Blog Options
  * Plugin URI: https://github.com/LamcatUK/lcp-blog-options
  * Description: A WordPress plugin to manage blog functionality including disabling blog, comments, and gravatars.
- * Version: 1.4.0
+ * Version: 1.5.0
  * Author: Lamcat - DS
  * License: GPL v2 or later
  *
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 // Define plugin constants.
 if ( ! defined( 'LC_BLOG_OPTIONS_VERSION' ) ) {
-	define( 'LC_BLOG_OPTIONS_VERSION', '1.4.0' );
+	define( 'LC_BLOG_OPTIONS_VERSION', '1.5.0' );
 }
 if ( ! defined( 'LC_BLOG_OPTIONS_PLUGIN_DIR' ) ) {
 	define( 'LC_BLOG_OPTIONS_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -62,6 +62,7 @@ if ( ! class_exists( 'LCPBlogOptions' ) ) {
 				'disable_emojis'                => 0,
 				'suppress_object_cache_warning' => 0,
 				'suppress_core_update_nag'      => 0,
+				'hide_dashboard_widget'         => 0,
 				// Security headers — all opt-in (see settings_init()); a header that
 				// changes browser behaviour site-wide shouldn't turn itself on for an
 				// existing site just because the plugin updated.
@@ -261,6 +262,14 @@ JS;
 				'suppress_core_update_nag',
 				'Suppress Core Update Nag',
 				array( $this, 'suppress_core_update_nag_render' ),
+				'lc_blog_options',
+				'lc_blog_options_section'
+			);
+
+			add_settings_field(
+				'hide_dashboard_widget',
+				'Hide Lamcat Dashboard Widget',
+				array( $this, 'hide_dashboard_widget_render' ),
 				'lc_blog_options',
 				'lc_blog_options_section'
 			);
@@ -531,6 +540,18 @@ JS;
 		}
 
 		/**
+		 * Render hide dashboard widget checkbox
+		 */
+		public function hide_dashboard_widget_render() {
+			$options = get_option( $this->option_name );
+			$checked = isset( $options['hide_dashboard_widget'] ) ? $options['hide_dashboard_widget'] : 0;
+			?>
+			<input type="checkbox" id="hide_dashboard_widget" name="<?php echo esc_attr( $this->option_name ); ?>[hide_dashboard_widget]" value="1" <?php checked( 1, $checked ); ?>>
+			<label for="hide_dashboard_widget">Hide the Lamcat dashboard widget</label>
+			<?php
+		}
+
+		/**
 		 * Options page HTML
 		 */
 		public function options_page() {
@@ -595,8 +616,10 @@ JS;
 		public function apply_blog_restrictions() {
 			$options = get_option( $this->option_name );
 
-			// Add the Lamcat dashboard widget.
-			add_action( 'wp_dashboard_setup', array( $this, 'register_lc_dashboard_widget' ) );
+			// Add the Lamcat dashboard widget, unless explicitly hidden.
+			if ( empty( $options['hide_dashboard_widget'] ) ) {
+				add_action( 'wp_dashboard_setup', array( $this, 'register_lc_dashboard_widget' ) );
+			}
 
 			// Always remove unwanted dashboard widgets.
 			add_action( 'wp_dashboard_setup', array( $this, 'remove_unwanted_dashboard_widgets' ) );
