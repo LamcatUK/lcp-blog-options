@@ -32,6 +32,8 @@ The plugin also forces Advanced Custom Fields blocks to stay in edit mode in the
 
 - **Suppress Core Update Nag**: Hides the "WordPress x.x is available" banner and blocks WordPress from auto-updating to a new **major** version on its own — for sites deliberately pinned to an older release. Dashboard > Updates still works, and minor/security updates are unaffected. The major-update block can be lifted independently of the checkbox with `add_filter( 'lcp_block_major_core_auto_updates', '__return_false' )`.
 
+- **Hides WordPress 7 admin screens (always on)**: removes Appearance > Design (the Site Editor), Appearance > Fonts and Settings > Connectors from the admin menu, sends anyone who opens those screens directly back to the dashboard, and drops the Site Editor shortcut from the admin bar. There is no setting for this; it applies whenever the plugin is active.
+
 - **Lamcat Dashboard Widget**: Adds a branded admin dashboard widget with quick contact details
 
 - **Force ACF Block Edit Mode**: Keeps all ACF blocks in edit mode in the block editor, including newly inserted blocks. Can be disabled site-wide with `add_filter( 'lcp_acf_blocks_force_edit_mode', '__return_false' )`.
@@ -144,6 +146,10 @@ The plugin uses various WordPress hooks and filters to achieve its functionality
 This plugin is provided as-is. For customizations or support, please contact the plugin author.
 
 ## Changelog
+
+### 1.6.0
+
+- Always hide Appearance > Design, Appearance > Fonts and Settings > Connectors: removed from the menu, redirected to the dashboard if opened directly, and the Site Editor admin bar shortcut removed. No setting; applies whenever the plugin is active
 
 ### 1.2.0
 
